@@ -29,7 +29,7 @@ public class SpiderService {
       pipeline.addObserver(new ObserverB());
       pipeline.addObserver(new ObserverC());
       defaultSpider.setProcessStrategy(new IteratorProcessor());
-      defaultSpider.getSpider()
+      defaultSpider.getSpider()//获取爬虫实体
           .addUrl(beginUrl)
           .addPipeline(pipeline)
           .thread(1)

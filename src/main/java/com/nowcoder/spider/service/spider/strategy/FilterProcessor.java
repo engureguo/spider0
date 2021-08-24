@@ -15,14 +15,14 @@ import us.codecraft.webmagic.Page;
  */
 public class FilterProcessor implements ProcessStrategy {
 
-  protected volatile ProcessStrategy processStrategy;
+    protected volatile ProcessStrategy processStrategy;
 
-  public FilterProcessor(ProcessStrategy processStrategy){
-    this.processStrategy = processStrategy;
-  }
+    public FilterProcessor(ProcessStrategy processStrategy) {
+        this.processStrategy = processStrategy;
+    }
 
-  @Override
-  public void doProcess(Page page) {
-    processStrategy.doProcess(page);
-  }
+    @Override
+    public void doProcess(Page page) {
+        processStrategy.doProcess(page);
+    }
 }

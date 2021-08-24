@@ -3,7 +3,7 @@ package com.nowcoder.spider.service.spider.strategy;
 import us.codecraft.webmagic.Page;
 
 /**
- * Processor Description: CreateDate: 2018/8/14
+ * 策略模式总接口
  *
  * @author nowcoder
  */
@@ -11,9 +11,9 @@ import us.codecraft.webmagic.Page;
 
 public interface ProcessStrategy {
 
-  /**
-   * 爬虫具体执行的方法 {@link Page}
-   */
-  void doProcess(Page page);
+    /**
+     * 爬虫具体执行的方法 {@link Page}
+     */
+    void doProcess(Page page);
 
 }
