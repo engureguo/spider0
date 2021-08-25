@@ -5,8 +5,8 @@
 ## contents
 
 - [webmagic](#webmagic)
-- [webmagic 示例程序](#webmagic 示例程序)
-- [webmagic 扩展](#webmagic 扩展)
+- [webmagic 示例程序](#webmagic-示例程序)
+- [webmagic 扩展](#webmagic-扩展)
 
 ## webmagic
 
