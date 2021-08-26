@@ -1,3 +1,5 @@
+
+
 ## guide
 
 - 本篇代码位置 **com.engure.spider.demo** ，是仿照牛客网提供的代码 **com.engure.spider.service**
@@ -279,17 +281,281 @@ public class IteratorPageProcessStrategy extends DecoratorPageProcessStrategy {
 
 
 
+### 观察者模式拓展 pipeline
+
+pipeline 简单使用
+
+```java
+class MyPipeLine implements Pipeline {
+
+    @Override
+    public void process(ResultItems resultItems, Task task) {
+        System.out.println("----------------------------------");
+        System.out.println("allAttr = " + resultItems.getAll());
+        Site site = task.getSite();
+        System.out.println("uuid = " + task.getUUID());
+        System.out.println("domain = " + site.getDomain());
+        System.out.println("cookies = " + site.getAllCookies());
+        System.out.println("headers = " + site.getHeaders());
+        System.out.println("==================================");
+    }
+}
+```
+
+思考：
+
+1. **怎么理解 pipeline 的数据处理？**
+
+pipeline 调用 process 方法获取数据，需要对数据进一步处理（加工、检错、包装等），然后将数据写入磁盘（包括文件、数据库等载体）
+
+2. **直接继承 pipeline 接口？这样有什么问题？**
+
+不同的 pipeline 都要进行相同数据处理，然后以不同的方式写入磁盘。其中的数据处理部分重复了。
+
+3. **装饰器模式可以吗？**
+
+装饰器模式是做一种非继承方式的功能扩展。不同的 pipeline 的使命是使用不同的方式将数据写入磁盘，与功能拓展关系不大。
+
+4. **怎么做比较好？**
+
+使用观察者模式，pipeline 充当被观察者，不同的数据处理方式充当观察者，当 Pipeline 把结果准备好的时候，主动去推送结果。
 
 
 
+定义观察者和被观察者
+
+```java
+public interface Observerable {
+    void notifyAllObservers(Object data);
+    void addObserver(Observer observer);
+    void deleteObserver(Observer observer);
+}
+
+public interface Observer {
+    void update(Object data);
+}
+```
+
+被观察者充当 pipeline 角色
+
+```java
+public class ObserverablePipeline implements Observerable, Pipeline {
+
+    private Vector<Observer> observers = new Vector<>(16);
+
+    @Override
+    public void notifyAllObservers(Object data) {
+        for (Observer observer : observers) {
+            observer.update(data);
+        }
+    }
+
+    @Override
+    public void addObserver(Observer observer) {
+        if (!observers.contains(observer))
+            observers.add(observer);
+    }
+
+    @Override
+    public void deleteObserver(Observer observer) {
+        observers.removeElement(observer);
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+
+    @Override
+    public void process(ResultItems resultItems, Task task) {
+        //数据处理
+        List<Book0> bookList = resultItems.get("data");
+        String domain = task.getSite().getDomain();
+        Book1 book1 = new Book1(bookList, domain);
+
+        notifyAllObservers(book1);//写入bean
+    }
+
+}
+```
+
+<img src="images/note.assets/image-20210826230810726.png" alt="image-20210826230810726" style="zoom:80%;" />
+
+> com.engure.spider.demo.pipeline 包下是 demo 类
+>
+> com.engure.spider.demo.spider.pipeline 包下是是观察者模式拓展的 pipeline 类
 
 
 
+## 源码分析
 
 
 
+### 运行逻辑
+
+```java
+//爬虫运行：从调度器中取request，创建任务放在线程池中执行
+@Override
+public void run() {
+    checkRunningStat();
+    initComponent();
+    logger.info("Spider {} started!",getUUID());
+    while (!Thread.currentThread().isInterrupted() && stat.get() == STAT_RUNNING) {
+        final Request request = scheduler.poll(this);//从调度器中取请求
+        if (request == null) {
+            if (threadPool.getThreadAlive() == 0 && exitWhenComplete) {
+                break;
+            }
+            // wait until new url added
+            waitNewUrl();
+        } else {
+            threadPool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        processRequest(request);//处理请求
+                        onSuccess(request);//爬虫监听，还不知道作什么
+                    } catch (Exception e) {
+                        onError(request);//爬虫监听，还不知道作什么
+                        logger.error("process request " + request + " error", e);
+                    } finally {
+                        pageCount.incrementAndGet();
+                        signalNewUrl();//通知waitNewUrl上等待的线程
+                    }
+                }
+            });
+        }
+    }
+    stat.set(STAT_STOPPED);
+    // release some resources
+    if (destroyWhenExit) {
+        close();
+    }
+    logger.info("Spider {} closed! {} pages downloaded.", getUUID(), pageCount.get());
+}
+
+//下载页面，进行处理
+private void processRequest(Request request) {
+    Page page = downloader.download(request, this);
+    if (page.isDownloadSuccess()){
+        onDownloadSuccess(request, page);
+    } else {
+        onDownloaderFail(request);
+    }
+}
+
+//页面成功的处理方式
+private void onDownloadSuccess(Request request, Page page) {
+    if (site.getAcceptStatCode().contains(page.getStatusCode())){
+        pageProcessor.process(page);//策略模式，将页面处理抽离出来
+        extractAndAddRequests(page, spawnUrl);//抽取page中新加入的request到调度队列中
+        if (!page.getResultItems().isSkip()) {//判断page页是否进行数据处理
+            for (Pipeline pipeline : pipelines) {
+                pipeline.process(page.getResultItems(), this);//策略模式，将数据处理抽离出来
+            }
+        }
+    } else {
+        logger.info("page status code error, page {} , code: {}", request.getUrl(), page.getStatusCode());
+    }
+    sleep(site.getSleepTime());//间隔时间
+    return;
+}
+
+//等待和重试
+private void onDownloaderFail(Request request) {
+    if (site.getCycleRetryTimes() == 0) {
+        sleep(site.getSleepTime());
+    } else {
+        // for cycle retry
+        doCycleRetry(request);
+    }
+}
+
+//重试策略，复制request，设置优先级，加入队列
+private void doCycleRetry(Request request) {
+    Object cycleTriedTimesObject = request.getExtra(Request.CYCLE_TRIED_TIMES);
+    if (cycleTriedTimesObject == null) {
+        addRequest(SerializationUtils.clone(request).setPriority(0).putExtra(Request.CYCLE_TRIED_TIMES, 1));
+    } else {
+        int cycleTriedTimes = (Integer) cycleTriedTimesObject;
+        cycleTriedTimes++;
+        if (cycleTriedTimes < site.getCycleRetryTimes()) {
+            addRequest(SerializationUtils.clone(request).setPriority(0).putExtra(Request.CYCLE_TRIED_TIMES, cycleTriedTimes));
+        }
+    }
+    sleep(site.getRetrySleepTime());
+}
+
+```
 
 
+
+### 爬虫组件
+
+```java
+//初始化组件：下载器、pipeline、线程池
+protected void initComponent() {
+    if (downloader == null) {
+        this.downloader = new HttpClientDownloader();
+    }
+    if (pipelines.isEmpty()) {
+        pipelines.add(new ConsolePipeline());
+    }
+    downloader.setThread(threadNum);
+    if (threadPool == null || threadPool.isShutdown()) {
+        if (executorService != null && !executorService.isShutdown()) {
+            threadPool = new CountableThreadPool(threadNum, executorService);
+        } else {
+            threadPool = new CountableThreadPool(threadNum);
+        }
+    }
+    if (startRequests != null) {
+        for (Request request : startRequests) {
+            addRequest(request);
+        }
+        startRequests.clear();
+    }
+    startTime = new Date();
+}
+```
+
+
+
+### 调度队列
+
+```java
+public class QueueScheduler extends DuplicateRemovedScheduler implements MonitorableScheduler {
+
+    private BlockingQueue<Request> queue = new LinkedBlockingQueue<Request>();
+
+    @Override
+    public void pushWhenNoDuplicate(Request request, Task task) {
+        queue.add(request);
+    }
+
+    @Override
+    public Request poll(Task task) {
+        return queue.poll();
+    }
+
+    @Override
+    public int getLeftRequestsCount(Task task) {
+        return queue.size();
+    }
+
+    @Override
+    public int getTotalRequestsCount(Task task) {
+        return getDuplicateRemover().getTotalRequestsCount(task);
+    }
+}
+```
+
+
+
+### 复杂的爬虫
+
+项目的爬虫爬取的页面较少只有列表页和详情页，当页面有多种类型时，跟能体现出拓展的重要性
+
+
+
+爬取图片
 
 
 

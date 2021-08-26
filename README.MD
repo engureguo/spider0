@@ -422,7 +422,7 @@ webmagic 认为我们应该在 Pipeline 中完全消费掉结果（存到数据�
 
 #### 装饰器模式（参考java.io包的实现）
 
-> 参考 装饰器模式 | 菜鸟教程 (runoob.com)](https://www.runoob.com/design-pattern/decorator-pattern.html)
+> 参考 [装饰器模式 | 菜鸟教程 (runoob.com)](https://www.runoob.com/design-pattern/decorator-pattern.html)
 >
 > ### 装饰器模式
 >

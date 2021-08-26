@@ -1,12 +1,14 @@
 package com.engure.spider.demo.spider;
 
-import com.engure.spider.demo.spider.strategy.impl.IteratorPageProcessStrategy;
+import com.engure.spider.demo.spider.pipeline.observable.ObserverablePipeline;
+import com.engure.spider.demo.spider.pipeline.observer.ConsoleObserver;
+import com.engure.spider.demo.spider.pipeline.observer.FileObserver;
 import com.engure.spider.demo.spider.strategy.PageProcessStrategy;
+import com.engure.spider.demo.spider.strategy.impl.IteratorPageProcessStrategy;
 import org.springframework.stereotype.Service;
 import us.codecraft.webmagic.Page;
 import us.codecraft.webmagic.Site;
 import us.codecraft.webmagic.Spider;
-import us.codecraft.webmagic.pipeline.ConsolePipeline;
 import us.codecraft.webmagic.processor.PageProcessor;
 
 @Service
@@ -40,9 +42,14 @@ public class SpiderTemplate implements PageProcessor {
 
     public void startCrawl(String... urls) {
 
+        ObserverablePipeline pipeline = new ObserverablePipeline();
+        pipeline.addObserver(new ConsoleObserver());
+        pipeline.addObserver(new FileObserver());
+
         //启动爬虫
         getSpider().addUrl(urls)
-                .addPipeline(new ConsolePipeline())
+                //.addPipeline(new ConsolePipeline())
+                .addPipeline(pipeline)
                 .thread(5)
                 .run();
     }

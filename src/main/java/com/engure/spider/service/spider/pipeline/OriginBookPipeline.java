@@ -27,6 +27,12 @@ public class OriginBookPipeline implements CallablePipeline {
         obs = new Vector<>();
     }
 
+    /**
+     * 数据的包装
+     *
+     * @param resultItems
+     * @param task
+     */
     @Override
     public void process(ResultItems resultItems, Task task) {
         originBook = resultItems.get("book");
